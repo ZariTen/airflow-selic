@@ -1,15 +1,15 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.2.2
+  build: .
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__API__BASE_URL: http://airflow-api-server:8080
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API_AUTH__JWT_SECRET: 'a-very-secret-key-change-in-production'
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    _PIP_ADDITIONAL_REQUIREMENTS: ''
-
+    AIRFLOW_CONN_BCB_API: 'https://api.bcb.gov.br'
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "airflow:admin"
   volumes:
     - ./dags:/opt/airflow/dags
@@ -106,11 +106,7 @@ services:
       - -c
       - |
         mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins}
-
-        # Build the initial clean database structure
         /entrypoint airflow db migrate
-
         exec /entrypoint airflow version
     environment:
       <<: *airflow-common-env
