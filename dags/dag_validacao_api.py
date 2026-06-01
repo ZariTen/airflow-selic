@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from airflow.sdk import DAG
+from airflow.models import DAG
 from airflow.providers.http.sensors.http import HttpSensor
-from airflow.operators.empty import EmptyOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 with DAG(
     dag_id='validacao_api_bcb',
@@ -9,12 +9,9 @@ with DAG(
     schedule='@daily',
     start_date=datetime(2026, 1, 1),
     catchup=False,
-    tags=['bcb', 'sensor'],
+    tags=['bcb', 'sensor', 'infra'],
     default_args={
         'owner': 'airflow',
-        'depends_on_past': False,
-        'email_on_failure': False,
-        'email_on_retry': False,
         'retries': 2,
         'retry_delay': timedelta(minutes=5),
     },
@@ -36,6 +33,10 @@ with DAG(
         mode='poke',
     )
 
-    proceed_to_extraction = EmptyOperator(task_id='proceed_to_extraction')
+    trigger_ingestion_pipeline = TriggerDagRunOperator(
+        task_id='trigger_ingestion_pipeline',
+        trigger_dag_id='rodar_ingestao_selic',
+        wait_for_completion=False,
+    )
 
-    check_api_availability >> proceed_to_extraction
+    check_api_availability >> trigger_ingestion_pipeline
