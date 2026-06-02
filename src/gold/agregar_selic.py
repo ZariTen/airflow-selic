@@ -14,6 +14,7 @@ GOLD_PATH = "/opt/airflow/data/gold"
 
 
 def ler_silver() -> pd.DataFrame:
+    """Lê as partições da camada Silver e retorna um DataFrame unificado e ordenado."""
     if not os.path.exists(SILVER_PATH):
         raise FileNotFoundError(f"Diretório Silver não encontrado: {SILVER_PATH}")
 
@@ -48,10 +49,12 @@ def ler_silver() -> pd.DataFrame:
 
 
 def _taxa_acumulada(taxas: pd.Series) -> float:
-    return (np.prod(1 + taxas / 100) - 1) * 100
+    """Função interna para calcular o juro composto acumulado de uma série de taxas."""
+    return float((np.prod(1 + taxas / 100) - 1) * 100)
 
 
 def calcular_acumulado_mensal(df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega a taxa Selic por ano e mês, calculando o juro acumulado do período."""
     df = df.copy()
     df["ano"] = df["data"].dt.year
     df["mes"] = df["data"].dt.month
@@ -74,6 +77,7 @@ def calcular_acumulado_mensal(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calcular_acumulado_anual(df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega a taxa Selic por ano, calculando o juro acumulado e a média diária."""
     df = df.copy()
     df["ano"] = df["data"].dt.year
 
@@ -97,6 +101,7 @@ def calcular_acumulado_anual(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def salvar_gold(df: pd.DataFrame, nome_tabela: str) -> None:
+    """Grava as tabelas agregadas finais no diretório da camada Gold."""
     if df.empty:
         logger.warning(f"Nenhum dado para salvar na tabela Gold: {nome_tabela}")
         return
@@ -112,6 +117,7 @@ def salvar_gold(df: pd.DataFrame, nome_tabela: str) -> None:
 
 
 def process_gold_selic() -> None:
+    """Orquestrador principal para geração dos indicadores analíticos da Gold."""
     logger.info("Iniciando processamento da camada Gold")
 
     df_silver = ler_silver()

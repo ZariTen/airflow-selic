@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Tuple
 
 import pandas as pd
 
@@ -19,6 +20,7 @@ VALOR_MAX = 100.0
 
 
 def ler_bronze() -> pd.DataFrame:
+    """Lê recursivamente as partições no diretório Bronze e consolida num DataFrame."""
     if not os.path.exists(BRONZE_PATH):
         raise FileNotFoundError(f"Diretório Bronze não encontrado: {BRONZE_PATH}")
 
@@ -52,6 +54,7 @@ def ler_bronze() -> pd.DataFrame:
 
 
 def transformar(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica tipagem de dados e padronização de formatos."""
     df = df.copy()
 
     df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y", errors="coerce")
@@ -63,16 +66,14 @@ def transformar(df: pd.DataFrame) -> pd.DataFrame:
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
     qtd_valor_invalido = df["valor"].isna().sum()
     if qtd_valor_invalido:
-        logger.warning(
-            f"Valores que não puderam ser convertidos para float: {qtd_valor_invalido}"
-        )
+        logger.warning(f"Valores que não puderam ser convertidos: {qtd_valor_invalido}")
 
     return df
 
 
-def validar(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def validar(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Valida regras de negócio da Silver e separa registros bons dos ruins."""
     df = df.sort_values("data", na_position="last").reset_index(drop=True)
-
     motivos = pd.Series("", index=df.index, dtype=str)
 
     motivos[df["data"].isna()] += "[data_nula]"
@@ -113,25 +114,32 @@ def validar(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def salvar_silver(df_valido: pd.DataFrame) -> None:
+    """Salva os dados válidos, particionando por ano de forma eficiente."""
     if df_valido.empty:
         logger.warning("Nenhum dado válido para salvar na Silver.")
         return
 
-    for ano in sorted(df_valido["data"].dt.year.unique()):
+    df_valido = df_valido.copy()
+    df_valido["ano_particao"] = df_valido["data"].dt.year
+
+    for ano, df_ano in df_valido.groupby("ano_particao"):
         ano_dir = os.path.join(SILVER_PATH, f"ano={ano}")
         os.makedirs(ano_dir, exist_ok=True)
 
         caminho_arquivo = os.path.join(ano_dir, "selic.parquet")
-        df_ano = df_valido[df_valido["data"].dt.year == ano].copy()
 
         if os.path.exists(caminho_arquivo):
             logger.warning(f"Sobrescrevendo arquivo existente: {caminho_arquivo}")
 
-        df_ano.to_parquet(path=caminho_arquivo, engine="pyarrow", index=False)
-        logger.info(f"Silver {ano} salva: {caminho_arquivo} ({len(df_ano)} registros)")
+        df_salvar = df_ano.drop(columns=["ano_particao"])
+        df_salvar.to_parquet(path=caminho_arquivo, engine="pyarrow", index=False)
+        logger.info(
+            f"Silver {ano} salva: {caminho_arquivo} ({len(df_salvar)} registros)"
+        )
 
 
 def salvar_quarentena(df_invalido: pd.DataFrame) -> None:
+    """Acumula e grava os logs de inconsistências na Quarentena."""
     if df_invalido.empty:
         return
 
@@ -150,6 +158,7 @@ def salvar_quarentena(df_invalido: pd.DataFrame) -> None:
 
 
 def process_silver_selic() -> None:
+    """Função principal coordenadora da camada Silver."""
     logger.info("Iniciando processamento da camada Silver")
 
     df_bronze = ler_bronze()
