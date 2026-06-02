@@ -1,12 +1,81 @@
-import time
-import sys
+import logging
+import os
+from datetime import datetime
 
-def main():
-    print("--- INICIANDO CAMADA BRONZE ---")
-    print("Conectando à API do Banco Central...")
+import pandas as pd
+import requests
 
-    print("Dados da SELIC ingeridos com sucesso em formato bruto.")
-    print("--- CAMADA BRONZE FINALIZADA ---")
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+def ingest_selic_data_pure():
+    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=json&dataInicial=01/01/2020&dataFinal=31/12/2024"
+    base_path = "/opt/airflow/data/bronze"
+
+    try:
+        logger.info(f"Iniciando requisição GET para a URL: {url}")
+        response = requests.get(url, timeout=30)
+
+        response.raise_for_status()
+
+        dados_json = response.json()
+    except requests.exceptions.HTTPError as http_err:
+        logger.error(f"Erro HTTP encontrado: {http_err}")
+        raise
+    except requests.exceptions.ConnectionError as conn_err:
+        logger.error(f"Erro de Conexão encontrado: {conn_err}")
+        raise
+    except requests.exceptions.Timeout as timeout_err:
+        logger.error(f"Erro de Timeout encontrado: {timeout_err}")
+        raise
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"Erro genérico na requisição: {req_err}")
+        raise
+    except ValueError as json_err:
+        logger.error(f"Erro ao decodificar o JSON: {json_err}")
+        raise
+
+    try:
+        df = pd.DataFrame(dados_json)
+
+        if df.empty:
+            logger.warning("A API retornou uma lista de dados vazia.")
+            return
+
+        timestamp_ingestao = datetime.now().isoformat()
+        qtd_registros = len(df)
+
+        logger.info(f"Quantidade de registros recuperados: {qtd_registros}")
+
+        anos_presentes = pd.to_datetime(df["data"], format="%d/%m/%Y").dt.year.unique()
+        df["timestamp_ingestao"] = timestamp_ingestao
+
+    except Exception as e:
+        logger.error(f"Erro ao processar a estrutura dos dados no Pandas: {e}")
+        raise
+
+    try:
+        for ano in anos_presentes:
+            ano_dir = os.path.join(base_path, f"ano={ano}")
+            os.makedirs(ano_dir, exist_ok=True)
+
+            mascara_ano = pd.to_datetime(df["data"], format="%d/%m/%Y").dt.year == ano
+            df_ano = df[mascara_ano]
+
+            caminho_arquivo = os.path.join(ano_dir, "selic.parquet")
+
+            df_ano.to_parquet(path=caminho_arquivo, engine="pyarrow", index=False)
+            logger.info(f"Dados do ano {ano} salvos com sucesso em: {caminho_arquivo}")
+
+        logger.info("Carga da Camada Bronze Concluída!")
+
+    except Exception as e:
+        logger.error(f"Erro ao salvar os arquivos Parquet estruturados: {e}")
+        raise
+
 
 if __name__ == "__main__":
-    main()
+    ingest_selic_data_pure()
