@@ -32,6 +32,12 @@ with DAG(
         wait_for_completion=True,
     )
 
+    trigger_validacao_gold = TriggerDagRunOperator(
+        task_id="trigger_validacao_gold",
+        trigger_dag_id="sub_validacao_gold",
+        wait_for_completion=True,
+    )
+
     fim = EmptyOperator(task_id="fim")
 
-    inicio >> trigger_validacao >> trigger_ingestao >> fim
+    inicio >> trigger_validacao >> trigger_ingestao >> trigger_validacao_gold >> fim
