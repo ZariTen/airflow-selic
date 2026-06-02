@@ -7,7 +7,7 @@ from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOpe
 with DAG(
     dag_id="master_orquestrador_bcb",
     description="DAG Orquestradora para validação e ingestão da SELIC",
-    schedule="@daily",
+    schedule=None,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["master", "orquestrador", "bcb"],
