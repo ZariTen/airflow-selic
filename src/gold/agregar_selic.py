@@ -14,8 +14,6 @@ GOLD_PATH = "/opt/airflow/data/gold"
 
 
 def ler_silver() -> pd.DataFrame:
-    fragmentos = []
-
     if not os.path.exists(SILVER_PATH):
         raise FileNotFoundError(f"Diretório Silver não encontrado: {SILVER_PATH}")
 
@@ -28,6 +26,7 @@ def ler_silver() -> pd.DataFrame:
     if not particoes:
         raise ValueError(f"Nenhuma partição encontrada em: {SILVER_PATH}")
 
+    fragmentos = []
     for particao in sorted(particoes):
         caminho_parquet = os.path.join(SILVER_PATH, particao, "selic.parquet")
         if not os.path.exists(caminho_parquet):
@@ -43,57 +42,57 @@ def ler_silver() -> pd.DataFrame:
         raise ValueError("Nenhum dado foi carregado da camada Silver.")
 
     df = pd.concat(fragmentos, ignore_index=True)
+    df = df.sort_values("data").reset_index(drop=True)
     logger.info(f"Total de registros lidos da Silver: {len(df)}")
     return df
 
 
-def calcular_media_mensal(df: pd.DataFrame) -> pd.DataFrame:
+def _taxa_acumulada(taxas: pd.Series) -> float:
+    return (np.prod(1 + taxas / 100) - 1) * 100
+
+
+def calcular_acumulado_mensal(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["ano"] = df["data"].dt.year
     df["mes"] = df["data"].dt.month
 
-    def acumulada_mensal(taxas):
-        return (np.prod(1 + taxas / 100) - 1) * 100
-
     df_mensal = (
         df.groupby(["ano", "mes"])
         .agg(
-            taxa_acumulada_mensal=("valor", acumulada_mensal),
-            qtd_registros=("valor", "count"),
+            taxa_acumulada_mensal=("valor", _taxa_acumulada),
+            qtd_dias_uteis=("valor", "count"),
         )
         .reset_index()
         .sort_values(["ano", "mes"])
+        .reset_index(drop=True)
     )
 
     df_mensal["taxa_acumulada_mensal"] = df_mensal["taxa_acumulada_mensal"].round(4)
 
-    logger.info(f"Taxa acumulada mensal calculada: {len(df_mensal)} registros (ano/mês)")
-    return df_mensal
+    logger.info(f"Acumulado mensal calculado: {len(df_mensal)} registros (ano/mês)")
     return df_mensal
 
 
-def calcular_variacao_anual(df: pd.DataFrame) -> pd.DataFrame:
+def calcular_acumulado_anual(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["ano"] = df["data"].dt.year
-
-    def acumulada(taxas):
-        return np.prod(1 + taxas / 100) - 1
 
     df_anual = (
         df.groupby("ano")
         .agg(
-            taxa_acumulada_anual=("valor", acumulada),
-            taxa_media_anual=("valor", "mean"),
+            taxa_acumulada_anual=("valor", _taxa_acumulada),
+            taxa_media_diaria=("valor", "mean"),
             qtd_dias_uteis=("valor", "count"),
         )
         .reset_index()
         .sort_values("ano")
+        .reset_index(drop=True)
     )
 
-    df_anual["taxa_acumulada_anual"] = df_anual["taxa_acumulada_anual"].round(6)
-    df_anual["taxa_media_anual"] = df_anual["taxa_media_anual"].round(4)
+    df_anual["taxa_acumulada_anual"] = df_anual["taxa_acumulada_anual"].round(4)
+    df_anual["taxa_media_diaria"] = df_anual["taxa_media_diaria"].round(6)
 
-    logger.info(f"Variação acumulada anual calculada: {len(df_anual)} registros (ano)")
+    logger.info(f"Acumulado anual calculado: {len(df_anual)} registros (ano)")
     return df_anual
 
 
@@ -112,35 +111,17 @@ def salvar_gold(df: pd.DataFrame, nome_tabela: str) -> None:
     )
 
 
-def process_gold_selic():
-    logger.info("Iniciando Processamento da Camada Gold")
+def process_gold_selic() -> None:
+    logger.info("Iniciando processamento da camada Gold")
 
-    try:
-        df_silver = ler_silver()
-    except Exception as e:
-        logger.error(f"Falha na leitura da Silver: {e}")
-        raise
+    df_silver = ler_silver()
+    df_mensal = calcular_acumulado_mensal(df_silver)
+    df_anual = calcular_acumulado_anual(df_silver)
 
-    try:
-        df_media_mensal = calcular_media_mensal(df_silver)
-    except Exception as e:
-        logger.error(f"Falha no cálculo da média mensal: {e}")
-        raise
+    salvar_gold(df_mensal, "acumulado_mensal")
+    salvar_gold(df_anual, "acumulado_anual")
 
-    try:
-        df_variacao_anual = calcular_variacao_anual(df_silver)
-    except Exception as e:
-        logger.error(f"Falha no cálculo da variação acumulada anual: {e}")
-        raise
-
-    try:
-        salvar_gold(df_media_mensal, "media_mensal")
-        salvar_gold(df_variacao_anual, "variacao_acumulada_anual")
-    except Exception as e:
-        logger.error(f"Falha ao salvar dados na Gold: {e}")
-        raise
-
-    logger.info("Carga da Camada Gold Concluída!")
+    logger.info("Carga da camada Gold concluída!")
 
 
 if __name__ == "__main__":
