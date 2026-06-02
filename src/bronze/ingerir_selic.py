@@ -10,10 +10,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+BRONZE_PATH = "/opt/airflow/data/bronze"
+URL_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados"
+FORMATO = "json"
+DATA_INICIAL = "01/01/2020"
+DATA_FINAL = "31/12/2024"
+
 
 def ingest_selic_data_pure():
-    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=json&dataInicial=01/01/2020&dataFinal=31/12/2024"
-    base_path = "/opt/airflow/data/bronze"
+    url = f"{URL_BASE}?formato={FORMATO}&dataInicial={DATA_INICIAL}&dataFinal={DATA_FINAL}"
 
     try:
         logger.info(f"Iniciando requisição GET para a URL: {url}")
@@ -59,7 +64,7 @@ def ingest_selic_data_pure():
 
     try:
         for ano in anos_presentes:
-            ano_dir = os.path.join(base_path, f"ano={ano}")
+            ano_dir = os.path.join(BRONZE_PATH, f"ano={ano}")
             os.makedirs(ano_dir, exist_ok=True)
 
             mascara_ano = pd.to_datetime(df["data"], format="%d/%m/%Y").dt.year == ano
