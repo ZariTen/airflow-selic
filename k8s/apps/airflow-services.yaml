@@ -25,6 +25,7 @@ spec:
             name: airflow-config
         ports:
         - containerPort: 8080
+          hostPort: 8080
         volumeMounts:
         - name: airflow-arquivos
           mountPath: /opt/airflow/dags
