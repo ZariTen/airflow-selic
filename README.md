@@ -53,6 +53,38 @@ docker exec airflow-selic-airflow-scheduler-1 python /opt/airflow/src/gold/agreg
 
 Para parar: `docker-compose down` (ou `down -v` para apagar o volume do Postgres também).
 
-## Cobertura de dados
+### Kubernetes (Makefile)
 
-Série SGS 11 (SELIC diária), de 01/01/2020 a 31/12/2024, salva em Parquet via pyarrow.
+Pré-requisitos: [`kind`](https://kind.sigs.k8s.io/), `kubectl` e `docker` instalados e disponíveis no PATH.
+
+| Comando | O que faz |
+|---|---|
+| `make up` | Cria o cluster Kind (se necessário), build da imagem, injeta no cluster e sobe toda a stack |
+| `make down` | Derruba os serviços e a infraestrutura, mantendo o cluster |
+| `make clean` | Destroi o cluster Kind completamente |
+| `make status` | Lista os pods e seus status atuais |
+| `make help` | Exibe todos os comandos disponíveis |
+
+**Subir o ambiente completo:**
+
+```bash
+make up
+```
+
+**Verificar se os pods estão saudáveis:**
+
+```bash
+make status
+```
+
+**Derrubar os serviços (sem apagar o cluster):**
+
+```bash
+make down
+```
+
+**Limpeza total (apaga o cluster Kind):**
+
+```bash
+make clean
+```

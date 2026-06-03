@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-config
+data:
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-service/airflow
+  AIRFLOW__CORE__FERNET_KEY: "REMOVED"
+  AIRFLOW__API__BASE_URL: http://airflow-api-service:8080
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__API_AUTH__JWT_SECRET: "a-very-secret-key-change-in-production"
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+  AIRFLOW_CONN_BCB_API: "https://api.bcb.gov.br"
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "airflow:admin"
+  AIRFLOW__LOGGING__SERVER_HOST_FILTER: "airflow-scheduler-service"
+  AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT: "8793"
+  AIRFLOW__LOGGING__BASE_LOG_FOLDER: "/opt/airflow/logs"
+  AIRFLOW__LOGGING__REMOTE_LOGGING: "False"

@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-api-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-api-server
+  template:
+    metadata:
+      labels:
+        app: airflow-api-server
+    spec:
+      securityContext:
+        runAsUser: 50000
+        fsGroup: 0
+      containers:
+      - name: api-server
+        image: meu-airflow:local
+        imagePullPolicy: Never
+        args: ["api-server"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/dags
+          subPath: dags
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/src
+          subPath: src
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/logs
+          subPath: logs
+      volumes:
+      - name: airflow-arquivos
+        hostPath:
+          path: /files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-api-service
+spec:
+  type: NodePort
+  selector:
+    app: airflow-api-server
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow-scheduler
+    spec:
+      securityContext:
+        runAsUser: 50000
+        fsGroup: 0
+      containers:
+      - name: scheduler
+        image: meu-airflow:local
+        imagePullPolicy: Never
+        args: ["scheduler"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        volumeMounts:
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/dags
+          subPath: dags
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/src
+          subPath: src
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/logs
+          subPath: logs
+      volumes:
+      - name: airflow-arquivos
+        hostPath:
+          path: /files
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-dag-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-dag-processor
+  template:
+    metadata:
+      labels:
+        app: airflow-dag-processor
+    spec:
+      securityContext:
+        runAsUser: 50000
+        fsGroup: 0
+      containers:
+      - name: dag-processor
+        image: meu-airflow:local
+        imagePullPolicy: Never
+        args: ["dag-processor"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        volumeMounts:
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/dags
+          subPath: dags
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/src
+          subPath: src
+        - name: airflow-arquivos
+          mountPath: /opt/airflow/logs
+          subPath: logs
+      volumes:
+      - name: airflow-arquivos
+        hostPath:
+          path: /files
