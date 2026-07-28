@@ -33,13 +33,14 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
-        - name: airflow-arquivos
+        - name: airflow-logs
           mountPath: /opt/airflow/logs
-          subPath: logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-logs
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -86,13 +87,14 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
-        - name: airflow-arquivos
+        - name: airflow-logs
           mountPath: /opt/airflow/logs
-          subPath: logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-logs
+        emptyDir: {}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -126,10 +128,11 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
-        - name: airflow-arquivos
+        - name: airflow-logs
           mountPath: /opt/airflow/logs
-          subPath: logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-logs
+        emptyDir: {}

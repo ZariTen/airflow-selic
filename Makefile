@@ -1,39 +1,65 @@
 # Variáveis organizacionais
-CLUSTER_NAME=kind
-IMAGE_NAME=meu-airflow:local
+CLUSTER_NAME   ?= kind
+IMAGE_NAME     ?= meu-airflow:local
+KIND_CONFIG    ?= k8s/kind-config.yaml
+BASE_MANIFESTS ?= k8s/base/
+APP_MANIFESTS  ?= k8s/apps/
 
-.PHONY: up down status logs clean
+# Alvos virtuais (não geram arquivos)
+.PHONY: help up cluster build rebuild load deploy-base wait-postgres \
+        migrate deploy-services down clean status logs
 
-up: ## Cria o cluster (se necessário), faz build e sobe todo o ambiente de forma automática
-	@echo "Iniciando ambiente Kubernetes..."
-	@if ! kind get clusters | grep -q "^kind$$"; then \
-		echo "Cluster Kind nao encontrado. Criando."; \
-		kind create cluster --config k8s/kind-config.yaml; \
+help: ## Exibe esta ajuda
+	@echo "Alvos disponíveis:"
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
+		awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+
+# ---------- Ciclo de vida ----------
+up: cluster build load deploy-base wait-postgres migrate deploy-services ## Sobe o ambiente completo
+	@echo "Ambiente Airflow pronto no cluster '$(CLUSTER_NAME)'."
+
+cluster: ## Cria o cluster Kind se ainda não existir
+	@if ! kind get clusters | grep -q "^$(CLUSTER_NAME)$$"; then \
+		echo "Cluster '$(CLUSTER_NAME)' não encontrado. Criando..."; \
+		kind create cluster --config $(KIND_CONFIG); \
 	else \
-		echo "Cluster Kind ja existe. Pulando criacao."; \
+		echo "Cluster '$(CLUSTER_NAME)' já existe. Pulando criação."; \
 	fi
-	@echo "Build da imagem Docker..."
-	@docker build --no-cache -t $(IMAGE_NAME) .
-	@echo "Carregando imagem no cluster Kind (pode levar ate 1 minuto)."
-	@kind load docker-image $(IMAGE_NAME)
-	@echo "Aplicando infraestrutura base (ConfigMap, Volumes, Postgres)."
-	@kubectl apply -f k8s/base/
-	@echo "Aguardando Postgres ficar pronto..."
-	@kubectl wait --for=condition=ready pod -l app=postgres --timeout=60s
-	@echo "Executando migracoes do banco de dados (Airflow Init)."
-	@kubectl apply -f k8s/apps/airflow-init-job.yaml
-	@kubectl wait --for=condition=complete job/airflow-init --timeout=90s
-	@echo "Subindo servicos do Airflow (API, Scheduler e DAG Processor)."
-	@kubectl apply -f k8s/apps/airflow-services.yaml
 
-down: ## Derruba os serviços do Airflow sem apagar o cluster
-	@echo "Removendo servicos do Airflow..."
-	@kubectl delete -f k8s/apps/ || true
-	@kubectl delete -f k8s/base/ || true
+build: ## Build da imagem Docker (usa cache de camadas)
+	docker build -t $(IMAGE_NAME) .
+
+rebuild: ## Build limpo (--no-cache)
+	docker build --no-cache -t $(IMAGE_NAME) .
+
+load: ## Carrega a imagem no cluster Kind
+	kind load docker-image $(IMAGE_NAME) --name $(CLUSTER_NAME)
+
+deploy-base: ## Aplica ConfigMap, Volumes e Postgres
+	kubectl apply -f $(BASE_MANIFESTS)
+
+wait-postgres: ## Aguarda o Postgres ficar pronto
+	kubectl wait --for=condition=ready pod -l app=postgres --timeout=60s
+
+migrate: ## Roda as migrações (airflow-init job)
+	kubectl apply -f $(APP_MANIFESTS)airflow-init-job.yaml
+	kubectl wait --for=condition=complete job/airflow-init --timeout=90s
+
+deploy-services: ## Sobe API, Scheduler e DAG Processor
+	kubectl apply -f $(APP_MANIFESTS)airflow-services.yaml
+
+# ---------- Operação ----------
+down: ## Remove serviços sem apagar o cluster
+	@echo "Removendo serviços do Airflow..."
+	-kubectl delete -f $(APP_MANIFESTS)
+	-kubectl delete -f $(BASE_MANIFESTS)
 
 clean: ## Destrói o cluster Kind completamente
 	@echo "Destruindo cluster Kubernetes..."
-	@kind delete cluster
+	kind delete cluster --name $(CLUSTER_NAME)
 
-status: ## Verifica a saúde dos Pods no cluster
-	@kubectl get pods
+status: ## Mostra o estado dos Pods
+	kubectl get pods
+
+logs: ## Mostra logs dos pods do Airflow
+	kubectl logs -l app=airflow -f
