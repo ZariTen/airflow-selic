@@ -59,10 +59,19 @@ Pré-requisitos: [`kind`](https://kind.sigs.k8s.io/), `kubectl` e `docker` insta
 
 | Comando | O que faz |
 |---|---|
-| `make up` | Cria o cluster Kind (se necessário), build da imagem, injeta no cluster e sobe toda a stack |
-| `make down` | Derruba os serviços e a infraestrutura, mantendo o cluster |
-| `make clean` | Destroi o cluster Kind completamente |
+| `make up` | Sobe o ambiente completo |
+| `make cluster` | Cria o cluster Kind se ainda não existir |
+| `make build` | Build da imagem Docker (aproveita cache de camadas) |
+| `make rebuild` | Build limpo sem cache (`--no-cache`) |
+| `make load` | Carrega a imagem no cluster Kind |
+| `make deploy-base` | Aplica ConfigMap, Volumes e Postgres |
+| `make wait-postgres` | Aguarda o Pod do Postgres ficar pronto |
+| `make migrate` | Executa as migrações via `airflow-init` job |
+| `make deploy-services` | Sobe API, Scheduler e DAG Processor |
+| `make down` | Remove serviços e base, mantendo o cluster |
+| `make clean` | Destrói o cluster Kind completamente |
 | `make status` | Lista os pods e seus status atuais |
+| `make logs` | Segue os logs de todos os pods do Airflow |
 | `make help` | Exibe todos os comandos disponíveis |
 
 **Subir o ambiente completo:**
@@ -71,10 +80,27 @@ Pré-requisitos: [`kind`](https://kind.sigs.k8s.io/), `kubectl` e `docker` insta
 make up
 ```
 
+Cada etapa do pipeline acima também pode ser executada individualmente:
+
+```bash
+make cluster        # só cria o cluster
+make build          # só builda a imagem
+make rebuild        # build sem cache
+make deploy-base    # só aplica os manifests base
+make migrate        # só roda as migrações
+make deploy-services # só sobe os serviços Airflow
+```
+
 **Verificar se os pods estão saudáveis:**
 
 ```bash
 make status
+```
+
+**Acompanhar os logs:**
+
+```bash
+make logs
 ```
 
 **Derrubar os serviços (sem apagar o cluster):**
