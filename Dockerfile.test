@@ -1,0 +1,10 @@
+FROM apache/airflow:3.2.2
+
+COPY requirements.txt /requirements.txt
+COPY requirements-test.txt /requirements-test.txt
+RUN pip install --no-cache-dir -r /requirements-test.txt
+
+WORKDIR /opt/airflow
+ENV PYTHONPATH=/opt/airflow
+COPY src /opt/airflow/src
+COPY tests /opt/airflow/tests

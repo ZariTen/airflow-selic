@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: airflow-tests
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: airflow-tests
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: tests
+          image: meu-airflow:test
+          imagePullPolicy: Never
+          workingDir: /opt/airflow
+          command: ["pytest"]
+          args: ["-q"]

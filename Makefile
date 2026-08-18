@@ -1,17 +1,18 @@
 # Variáveis organizacionais
 CLUSTER_NAME   ?= kind
 IMAGE_NAME     ?= meu-airflow:local
+TEST_IMAGE     ?= meu-airflow:test
 KIND_CONFIG    ?= k8s/kind-config.yaml
 BASE_MANIFESTS ?= k8s/base/
 APP_MANIFESTS  ?= k8s/apps/
 
 # Alvos virtuais (não geram arquivos)
 .PHONY: help up cluster build rebuild load deploy-base wait-postgres \
-        migrate deploy-services down clean status logs
+        migrate deploy-services test-image load-test k8s-test down clean status logs
 
 help: ## Exibe esta ajuda
 	@echo "Alvos disponíveis:"
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | \
 		awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 # ---------- Ciclo de vida ----------
@@ -31,6 +32,22 @@ build: ## Build da imagem Docker (usa cache de camadas)
 
 rebuild: ## Build limpo (--no-cache)
 	docker build --no-cache -t $(IMAGE_NAME) .
+
+test-image: ## Build da imagem com as dependências e testes
+	docker build -f Dockerfile.test -t $(TEST_IMAGE) .
+
+load-test: ## Carrega a imagem de testes no cluster Kind
+	kind load docker-image $(TEST_IMAGE) --name $(CLUSTER_NAME)
+
+k8s-test: cluster test-image load-test ## Executa os testes unitários como Job no Kubernetes
+	-kubectl delete job airflow-tests --ignore-not-found
+	kubectl apply -f $(APP_MANIFESTS)airflow-tests-job.yaml
+	@if kubectl wait --for=condition=complete job/airflow-tests --timeout=120s; then \
+		kubectl logs job/airflow-tests; \
+	else \
+		kubectl logs job/airflow-tests; \
+		exit 1; \
+	fi
 
 load: ## Carrega a imagem no cluster Kind
 	kind load docker-image $(IMAGE_NAME) --name $(CLUSTER_NAME)
