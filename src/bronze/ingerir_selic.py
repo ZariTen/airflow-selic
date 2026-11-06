@@ -1,10 +1,15 @@
 import logging
 import os
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
 import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.periodo_selic import obter_periodo
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
@@ -14,14 +19,28 @@ logger = logging.getLogger(__name__)
 BRONZE_PATH = "/opt/airflow/data/bronze"
 URL_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados"
 FORMATO = "json"
-DATA_INICIAL = "01/01/2020"
-DATA_FINAL = "31/12/2024"
 
 
 def fetch_selic_data(
     url_base: str, formato: str, data_inicial: str, data_final: str
 ) -> List[Dict[str, Any]]:
-    """Extrai os dados da API do Banco Central."""
+    """Extrai a série em janelas inferiores a dez anos, sem lacunas."""
+    inicio = datetime.strptime(data_inicial, "%d/%m/%Y").date()
+    fim = datetime.strptime(data_final, "%d/%m/%Y").date()
+    if inicio > fim:
+        raise ValueError("Data inicial posterior à data final")
+    limite = inicio.replace(year=inicio.year + 10, day=1) - timedelta(days=1)
+    if fim > limite:
+        dados = []
+        while inicio <= fim:
+            limite = inicio.replace(year=inicio.year + 10, day=1) - timedelta(days=1)
+            final_janela = min(fim, limite)
+            dados.extend(fetch_selic_data(
+                url_base, formato, inicio.strftime("%d/%m/%Y"),
+                final_janela.strftime("%d/%m/%Y"),
+            ))
+            inicio = final_janela + timedelta(days=1)
+        return dados
     url = f"{url_base}?formato={formato}&dataInicial={data_inicial}&dataFinal={data_final}"
 
     try:
@@ -91,7 +110,10 @@ def save_data_by_year(df: pd.DataFrame, base_path: str) -> None:
 
 def pipeline_ingest_selic() -> None:
     """Orquestrador do pipeline de ingestão da Selic."""
-    dados_brutos = fetch_selic_data(URL_BASE, FORMATO, DATA_INICIAL, DATA_FINAL)
+    inicio, fim = obter_periodo()
+    dados_brutos = fetch_selic_data(
+        URL_BASE, FORMATO, inicio.strftime("%d/%m/%Y"), fim.strftime("%d/%m/%Y")
+    )
     df_processado = transform_selic_data(dados_brutos)
     save_data_by_year(df_processado, BRONZE_PATH)
 

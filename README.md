@@ -17,7 +17,15 @@ src/
 └── gold/agregar_selic.py     # agregações analíticas
 ```
 
-O fluxo é sempre disparado pela `master_orquestrador_bcb`, que aciona em sequência: validação da API, pipeline de ingestão e validação da camada Gold.
+O fluxo é coordenado pela `master_orquestrador_bcb`, diariamente às **10h no fuso `America/Sao_Paulo`**, em sequência: validação da API, pipeline de ingestão e validação da camada Gold. Também é possível dispará-lo manualmente. As sub-DAGs não têm agendamento próprio e cada DAG permite somente uma execução ativa.
+
+### Período de atualização
+
+Por padrão, cada execução consulta **01/01/2020 até a data atual de São Paulo**, reprocessando o período completo e sobrescrevendo as partições anuais. A última observação depende da publicação pelo BCB: fins de semana, feriados e o dia em andamento podem não ter dados. Consultas longas são divididas em janelas inferiores a dez anos.
+
+Para reproduzir um intervalo histórico, configure `SELIC_DATA_INICIAL` e `SELIC_DATA_FINAL` no formato `DD/MM/AAAA` no ambiente dos serviços Airflow (bloco `x-airflow-common.environment` do Compose ou ConfigMap do Kubernetes). Deixe as variáveis ausentes para usar o padrão dinâmico. Datas inválidas, período invertido e término futuro são rejeitados. Use um volume de dados separado para cargas históricas, evitando misturá-las com as partições da carga diária.
+
+A validação Gold confere a cobertura de anos e meses do intervalo, descontando fins de semana e feriados bancários e tolerando a ausência do dia final ainda não publicado. O sensor de disponibilidade consulta apenas os últimos 14 dias.
 
 ## Decisões técnicas
 
@@ -51,11 +59,30 @@ docker exec airflow-selic-airflow-scheduler-1 python /opt/airflow/src/silver/tra
 docker exec airflow-selic-airflow-scheduler-1 python /opt/airflow/src/gold/agregar_selic.py
 ```
 
-Para parar: `docker-compose down` (ou `down -v` para apagar o volume do Postgres também).
+Para parar: `docker-compose down`. Os dados em `/opt/airflow/data` ficam em um volume nomeado compartilhado pelos serviços e sobrevivem à recriação dos containers. **`docker-compose down -v` apaga os volumes de dados e do Postgres.**
 
 ### Kubernetes (Makefile)
 
 Pré-requisitos: [`kind`](https://kind.sigs.k8s.io/), `kubectl` e `docker` instalados e disponíveis no PATH.
+
+Os serviços compartilham o PVC `airflow-data-pvc` em `/opt/airflow/data`, com acesso de escrita para o usuário do Airflow. A configuração `ReadWriteOnce` atende ao Kind de um nó deste projeto; em clusters com múltiplos nós, é necessário manter os consumidores no mesmo nó ou usar armazenamento `ReadWriteMany`. `make down` preserva os PVCs; **`make clean` destrói o cluster e seus dados locais**.
+
+### Testes locais
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-test.txt
+python -m pytest -q
+```
+
+Os testes de implantação verificam os manifests sem criar containers ou recursos Kubernetes. Com Airflow instalado, a suíte também carrega as quatro DAGs e renderiza o sensor real. Para habilitar as integrações que consultam a API do BCB:
+
+```bash
+SELIC_TESTE_API_REAL=1 python -m pytest -q tests/test_atualizacao_real.py
+```
+
+Sem essa variável, os testes de rede são ignorados; sem Airflow instalado, apenas os testes de runtime das DAGs são ignorados.
 
 | Comando | O que faz |
 |---|---|

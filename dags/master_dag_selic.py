@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from pendulum import datetime
 from airflow import DAG
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
@@ -33,8 +34,9 @@ DEFAULT_ARGS = {
 with DAG(
     dag_id="master_orquestrador_bcb",
     description="DAG orquestradora para validação e ingestão da SELIC",
-    schedule=None,
-    start_date=datetime(2026, 1, 1),
+    schedule="0 10 * * *",
+    max_active_runs=1,
+    start_date=datetime(2026, 1, 1, tz="America/Sao_Paulo"),
     catchup=False,
     tags=["master", "orquestrador", "bcb"],
     default_args=DEFAULT_ARGS,

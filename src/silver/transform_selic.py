@@ -1,8 +1,13 @@
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Tuple
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.periodo_selic import obter_periodo
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
@@ -13,8 +18,6 @@ BRONZE_PATH = "/opt/airflow/data/bronze"
 SILVER_PATH = "/opt/airflow/data/silver"
 QUARENTENA_PATH = "/opt/airflow/data/quarentena"
 
-ANO_INICIAL = 2020
-ANO_FINAL = 2024
 VALOR_MIN = 0.0
 VALOR_MAX = 100.0
 
@@ -78,10 +81,12 @@ def validar(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     motivos[df["data"].isna()] += "[data_nula]"
 
+    inicio, fim = obter_periodo()
+    ano_inicial, ano_final = inicio.year, fim.year
     mask_fora_range = df["data"].notna() & (
-        (df["data"].dt.year < ANO_INICIAL) | (df["data"].dt.year > ANO_FINAL)
+        (df["data"] < pd.Timestamp(inicio)) | (df["data"] > pd.Timestamp(fim))
     )
-    motivos[mask_fora_range] += f"[data_fora_range_{ANO_INICIAL}_{ANO_FINAL}]"
+    motivos[mask_fora_range] += f"[data_fora_range_{ano_inicial}_{ano_final}]"
 
     motivos[df["valor"].isna()] += "[valor_nulo]"
     motivos[df["valor"].notna() & (df["valor"] < VALOR_MIN)] += "[valor_negativo]"

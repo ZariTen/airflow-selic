@@ -34,6 +34,7 @@ with DAG(
     dag_id="rodar_ingestao_selic",
     description="Pipeline medalhão para processar dados da SELIC (Bronze → Silver → Gold)",
     schedule=None,
+    max_active_runs=1,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["bcb", "medallion", "etl"],

@@ -1,18 +1,42 @@
 import logging
 import os
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
+from pandas.tseries.holiday import AbstractHolidayCalendar, Holiday, Easter
+from pandas.tseries.offsets import Day
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.periodo_selic import obter_periodo
 
 logger = logging.getLogger("airflow.task")
 
 GOLD_PATH = "/opt/airflow/data/gold"
 TABELAS_ESPERADAS = ["acumulado_mensal", "acumulado_anual"]
-ANOS_OBRIGATORIOS = set(range(2020, 2025))
-VOLUMETRIA_MINIMA = 50
+
+
+class CalendarioBancario(AbstractHolidayCalendar):
+    """Feriados nacionais que podem adiar a primeira observação de um período."""
+    rules = [
+        Holiday("Ano Novo", month=1, day=1),
+        Holiday("Tiradentes", month=4, day=21),
+        Holiday("Dia do Trabalho", month=5, day=1),
+        Holiday("Independência", month=9, day=7),
+        Holiday("Nossa Senhora Aparecida", month=10, day=12),
+        Holiday("Finados", month=11, day=2),
+        Holiday("Proclamação da República", month=11, day=15),
+        Holiday("Consciência Negra", month=11, day=20, start_date="2024-11-20"),
+        Holiday("Natal", month=12, day=25),
+        Holiday("Carnaval segunda", month=1, day=1, offset=[Easter(), Day(-48)]),
+        Holiday("Carnaval terça", month=1, day=1, offset=[Easter(), Day(-47)]),
+        Holiday("Sexta-feira Santa", month=1, day=1, offset=[Easter(), Day(-2)]),
+        Holiday("Corpus Christi", month=1, day=1, offset=[Easter(), Day(60)]),
+    ]
 
 
 def _on_failure_callback(context: dict) -> None:
@@ -56,12 +80,26 @@ def _validar_tabela(tabela: str) -> int:
             )
 
     anos_presentes = set(df["ano"].unique())
-    anos_faltantes = ANOS_OBRIGATORIOS - anos_presentes
+    inicio, fim = obter_periodo()
+    # O dia final pode ainda não ter sido publicado pelo BCB.
+    dias = pd.bdate_range(inicio, fim - timedelta(days=1))
+    feriados = CalendarioBancario().holidays(inicio, fim)
+    dias = dias[~dias.isin(feriados)]
+    meses_esperados = set(zip(dias.year, dias.month))
+    anos_faltantes = {ano for ano, _ in meses_esperados} - anos_presentes
     if anos_faltantes:
         raise ValueError(
             f"Tabela '{tabela}' sem cobertura completa. "
             f"Anos faltantes: {sorted(anos_faltantes)}"
         )
+
+    if tabela == "acumulado_mensal":
+        meses_presentes = set(zip(df["ano"], df["mes"]))
+        meses_faltantes = meses_esperados - meses_presentes
+        if meses_faltantes:
+            raise ValueError(
+                f"Tabela '{tabela}' com meses faltantes: {sorted(meses_faltantes)}"
+            )
 
     return linhas
 
@@ -100,12 +138,6 @@ def validar_camada_gold() -> None:
             + "\n".join(f"  - {e}" for e in erros)
         )
 
-    if total_linhas < VOLUMETRIA_MINIMA:
-        raise ValueError(
-            f"Volumetria total abaixo do mínimo esperado. "
-            f"Esperado >= {VOLUMETRIA_MINIMA}, encontrado: {total_linhas}"
-        )
-
     logger.info(
         "Validação Gold concluída. Tabelas: %s | Total de registros: %d",
         ", ".join(TABELAS_ESPERADAS),
@@ -126,6 +158,7 @@ with DAG(
     dag_id="sub_validacao_gold",
     description="DAG de validação de qualidade de dados para a camada Gold",
     schedule=None,
+    max_active_runs=1,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["subdag", "validacao", "gold"],

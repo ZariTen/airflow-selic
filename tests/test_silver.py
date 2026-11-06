@@ -24,7 +24,9 @@ def test_transformar_parses_dates_and_normalizes_decimal_values():
     assert pd.isna(result["valor"].iloc[2])
 
 
-def test_validar_separates_valid_records_and_records_all_rejection_reasons():
+def test_validar_separates_valid_records_and_records_all_rejection_reasons(monkeypatch):
+    monkeypatch.setenv("SELIC_DATA_INICIAL", "01/01/2020")
+    monkeypatch.setenv("SELIC_DATA_FINAL", "31/12/2024")
     df = pd.DataFrame(
         {
             "data": pd.to_datetime(
