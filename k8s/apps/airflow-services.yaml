@@ -33,12 +33,17 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
+        - name: airflow-data
+          mountPath: /opt/airflow/data
         - name: airflow-logs
           mountPath: /opt/airflow/logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-data
+        persistentVolumeClaim:
+          claimName: airflow-data-pvc
       - name: airflow-logs
         emptyDir: {}
 ---
@@ -87,12 +92,17 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
+        - name: airflow-data
+          mountPath: /opt/airflow/data
         - name: airflow-logs
           mountPath: /opt/airflow/logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-data
+        persistentVolumeClaim:
+          claimName: airflow-data-pvc
       - name: airflow-logs
         emptyDir: {}
 ---
@@ -128,11 +138,16 @@ spec:
         - name: airflow-arquivos
           mountPath: /opt/airflow/src
           subPath: src
+        - name: airflow-data
+          mountPath: /opt/airflow/data
         - name: airflow-logs
           mountPath: /opt/airflow/logs
       volumes:
       - name: airflow-arquivos
         hostPath:
           path: /files
+      - name: airflow-data
+        persistentVolumeClaim:
+          claimName: airflow-data-pvc
       - name: airflow-logs
         emptyDir: {}

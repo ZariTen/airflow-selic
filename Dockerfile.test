@@ -7,4 +7,7 @@ RUN pip install --no-cache-dir -r /requirements-test.txt
 WORKDIR /opt/airflow
 ENV PYTHONPATH=/opt/airflow
 COPY src /opt/airflow/src
+COPY dags /opt/airflow/dags
 COPY tests /opt/airflow/tests
+COPY docker-compose.yaml Makefile Dockerfile.test /opt/airflow/
+COPY k8s /opt/airflow/k8s

@@ -66,10 +66,11 @@ deploy-services: ## Sobe API, Scheduler e DAG Processor
 	kubectl apply -f $(APP_MANIFESTS)airflow-services.yaml
 
 # ---------- Operação ----------
-down: ## Remove serviços sem apagar o cluster
+down: ## Remove serviços, preservando o cluster e os volumes persistentes
 	@echo "Removendo serviços do Airflow..."
 	-kubectl delete -f $(APP_MANIFESTS)
-	-kubectl delete -f $(BASE_MANIFESTS)
+	-kubectl delete -f $(BASE_MANIFESTS)postgres.yaml
+	-kubectl delete -f $(BASE_MANIFESTS)configmap.yaml
 
 clean: ## Destrói o cluster Kind completamente
 	@echo "Destruindo cluster Kubernetes..."
