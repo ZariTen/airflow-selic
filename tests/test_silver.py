@@ -14,7 +14,11 @@ def test_transformar_parses_dates_and_normalizes_decimal_values():
         )
     )
 
-    assert str(result["data"].dtype) == "datetime64[ns]"
+    assert pd.api.types.is_datetime64_any_dtype(result["data"])
+    assert result["data"].iloc[:2].tolist() == [
+        pd.Timestamp("2024-01-02"),
+        pd.Timestamp("2024-01-03"),
+    ]
     assert result["valor"].iloc[:2].tolist() == [11.65, 12.10]
     assert pd.isna(result["data"].iloc[2])
     assert pd.isna(result["valor"].iloc[2])
